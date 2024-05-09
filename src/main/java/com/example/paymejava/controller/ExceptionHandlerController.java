@@ -25,6 +25,11 @@ public class ExceptionHandlerController extends ResponseEntityExceptionHandler {
         return ResponseEntity.ok(new Result(new Error(-31008, e.getMessage(), "transaction")));
     }
 
+    @ExceptionHandler({UnableCancelTransaction.class})
+    private ResponseEntity<?> handler(UnableCancelTransaction e) {
+        return ResponseEntity.ok(new Result(new Error(-31007, e.getMessage(), "transaction")));
+    }
+
     @ExceptionHandler({TransactionNotFoundException.class})
     private ResponseEntity<?> handler(TransactionNotFoundException e) {
         return ResponseEntity.ok(new Result(new Error(-31003, e.getMessage(), "transaction")));
@@ -33,5 +38,10 @@ public class ExceptionHandlerController extends ResponseEntityExceptionHandler {
     @ExceptionHandler({TransactionInWaiting.class})
     private ResponseEntity<?> handler(TransactionInWaiting e) {
         return ResponseEntity.ok(new Result(new Error(-31099, e.getMessage(), "transaction")));
+    }
+
+    @ExceptionHandler({OrderAlreadyPayed.class})
+    private ResponseEntity<?> handler(OrderAlreadyPayed e) {
+        return ResponseEntity.ok(new Result(new Error(-31099, e.getMessage(), "order payed/canceled")));
     }
 }
