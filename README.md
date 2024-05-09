@@ -1,1 +1,8 @@
-# payme-java
+## payme-java
+
+## Payme Merchant API 
+Documentation links:
+
+https://developer.help.paycom.uz/protokol-merchant-api/
+
+https://developer.help.paycom.uz/metody-merchant-api/
