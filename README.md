@@ -1,4 +1,4 @@
-## payme-java
+## payme-java-example
 
 ## Payme Merchant API 
 Documentation links:
