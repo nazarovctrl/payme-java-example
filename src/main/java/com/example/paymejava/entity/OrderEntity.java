@@ -11,7 +11,6 @@ import lombok.Setter;
 @Table(name = "custom_order")
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
 public class OrderEntity {
     @Id
@@ -27,4 +26,10 @@ public class OrderEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus status = OrderStatus.UNPAID;
+
+    public OrderEntity(Long id, Long amount, Boolean delivered) {
+        this.id = id;
+        this.amount = amount;
+        this.delivered = delivered;
+    }
 }
