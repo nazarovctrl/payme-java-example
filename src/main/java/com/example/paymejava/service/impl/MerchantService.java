@@ -4,6 +4,8 @@ import com.example.paymejava.dto.request.*;
 import com.example.paymejava.dto.result.*;
 import com.example.paymejava.entity.OrderEntity;
 import com.example.paymejava.entity.OrderTransactionEntity;
+import com.example.paymejava.enums.OrderCancelReason;
+import com.example.paymejava.enums.OrderStatus;
 import com.example.paymejava.enums.TransactionState;
 import com.example.paymejava.exp.*;
 import com.example.paymejava.repository.OrderRepository;
@@ -40,9 +42,19 @@ public class MerchantService implements IMerchantService {
     public CheckPerformTransactionResult checkPerformTransaction(CheckPerformTransaction checkPerformTransaction) {
         OrderEntity order = getOrder(checkPerformTransaction.getAccount().getOrderId());
 
+        if (!order.getStatus().equals(OrderStatus.UNPAID)) {
+            throw new OrderAlreadyPayed("Invoice already paid/cancelled");
+        }
         if (!checkPerformTransaction.getAmount().equals(order.getAmount())) {
             throw new WrongAmountException("Wrong amount");
         }
+
+        Optional<OrderTransactionEntity> optionalTransaction = transactionRepository
+                .findByOrder_Id(checkPerformTransaction.getAccount().getOrderId());
+        if (optionalTransaction.isPresent()) {
+            throw new TransactionInWaiting("transaction");
+        }
+
         return CheckPerformTransactionResult.builder()
                 .allow(true)
                 .detail(new DetailResult(0, List.of(
@@ -50,6 +62,7 @@ public class MerchantService implements IMerchantService {
                                 .code("10107002001000000")
                                 .title("Услуги по перевозке грузов автомобильным транспортом")
                                 .price(order.getAmount())
+                                .count(1)
                                 .packageCode("1209885")
                                 .vatPercent(0)
                                 .build())))
@@ -62,10 +75,16 @@ public class MerchantService implements IMerchantService {
 
         if (optional.isPresent()) {
             OrderTransactionEntity transaction = optional.get();
-            if (transaction.getState().equals(TransactionState.STATE_IN_PROGRESS) && System.currentTimeMillis() - transaction.getPaycomTime() < time_expired) {
-                return merchantUtil.getCreateTransactionResult(transaction);
+            if (!transaction.getState().equals(TransactionState.STATE_IN_PROGRESS)) {
+                throw new UnableCompleteException("Unable to complete operation");
             }
-            throw new UnableCompleteException("Unable to complete operation");
+            if (System.currentTimeMillis() - transaction.getPaycomTime() > time_expired) {
+                transaction.setReason(OrderCancelReason.TRANSACTION_TIMEOUT);
+                transaction.setState(TransactionState.STATE_CANCELED);
+                transactionRepository.save(transaction);
+                throw new UnableCompleteException("Unable to complete operation");
+            }
+            return merchantUtil.getCreateTransactionResult(transaction);
         }
 
         if (!checkPerformTransaction(new CheckPerformTransaction(createTransaction.getAmount(),
@@ -104,6 +123,11 @@ public class MerchantService implements IMerchantService {
             if (System.currentTimeMillis() - transaction.getPaycomTime() < time_expired) {
                 transaction.setState(TransactionState.STATE_DONE);
                 transaction.setPerformTime(new Date().getTime());
+
+                OrderEntity order = transaction.getOrder();
+                order.setStatus(OrderStatus.PAID);
+                orderRepository.save(order);
+
                 transactionRepository.save(transaction);
                 return new PerformTransactionResult(transaction.getId().toString(), transaction.getPerformTime(), transaction.getState().getCode());
             }
@@ -125,25 +149,36 @@ public class MerchantService implements IMerchantService {
         }
 
         OrderTransactionEntity transaction = optional.get();
-        if (transaction.getState().equals(TransactionState.STATE_DONE)) {
+        if (transaction.getState().equals(TransactionState.STATE_CANCELED) ||
+                transaction.getState().equals(TransactionState.STATE_POST_CANCELED)) {
+            return new CancelTransactionResult(transaction.getId().toString(), transaction.getCancelTime(), transaction.getState().getCode());
+        }
+
+        OrderEntity order = transaction.getOrder();
+        if (transaction.getState().equals(TransactionState.STATE_IN_PROGRESS)) {
+            transaction.setState(TransactionState.STATE_CANCELED);
+            order.setStatus(OrderStatus.CANCELED);
+            orderRepository.save(order);
+        } else if (transaction.getState().equals(TransactionState.STATE_DONE)) {
             if (transaction.getOrder().getDelivered()) {
                 throw new UnableCancelTransaction("Unable cancel transaction");
             }
+            order.setStatus(OrderStatus.REFUNDED);
+            orderRepository.save(order);
             transaction.setState(TransactionState.STATE_POST_CANCELED);
-        } else {
-            transaction.setState(TransactionState.STATE_CANCELED);
         }
 
         transaction.setCancelTime(new Date().getTime());
         transaction.setReason(cancelTransaction.getReason());
         transactionRepository.save(transaction);
+
         return new CancelTransactionResult(transaction.getId().toString(), transaction.getCancelTime(), transaction.getState().getCode());
     }
 
     @Override
     public Transactions getStatement(GetStatement getStatement) {
         Optional<List<OrderTransactionEntity>> optional = transactionRepository
-                .findByPaycomTimeBetweenAndState(getStatement.getFrom(), getStatement.getTo(), TransactionState.STATE_DONE);
+                .findByPaycomTimeBetween(getStatement.getFrom(), getStatement.getTo());
 
         if (optional.isEmpty()) {
             return new Transactions(new ArrayList<>());

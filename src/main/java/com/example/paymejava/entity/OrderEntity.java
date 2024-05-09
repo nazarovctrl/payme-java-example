@@ -1,5 +1,6 @@
 package com.example.paymejava.entity;
 
+import com.example.paymejava.enums.OrderStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,4 +23,8 @@ public class OrderEntity {
 
     @Column
     private Boolean delivered;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status = OrderStatus.UNPAID;
 }

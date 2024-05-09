@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/payme/merchant")
 @RequiredArgsConstructor
 public class MerchantController {
     private final IMerchantService merchantService;
     private final AuthUtil authUtil;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Gson gson = new GsonBuilder().serializeNulls().create();
 
     @PostMapping
     public ResponseEntity<?> handle(HttpServletRequest request) {
